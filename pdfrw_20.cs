@@ -1,3 +1,5 @@
+// pdfrw_20.cs - .NET DLL wrapper for PDF Report Writer
+
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
@@ -23,13 +25,13 @@ namespace FyTek
         {
 
         }
-        private List<string> cmds = new List<string>();
-        private List<string> dataCmds = new List<string>();
-        private Dictionary<string,string> opts = new Dictionary<string,string>();
-        private String exe = "pdfrw64";
         private TcpClient client = new TcpClient();
         private NetworkStream stream;
-        private Dictionary<string,object> server = new Dictionary<string,object>();
+        private List<string> cmds = new List<string>(); // input commands (input.frw)
+        private List<string> dataCmds = new List<string>(); // data file (when not using setDataFile)
+        private String exe = "pdfrw64"; // the executable - change with setExe
+        private Dictionary<string,string> opts = new Dictionary<string,string>(); // all of the parameter settings from the method calls
+        private Dictionary<string,object> server = new Dictionary<string,object>(); // the server host/port/log file key/values
         
         // Start up Report Writer as a server
         [ComVisible(true)]
@@ -75,6 +77,16 @@ namespace FyTek
             return errMsg;
         }
 
+        [ComVisible(true)]
+        public void setServer(
+            String host = "localhost",
+            int port = 7075
+          )
+       {
+            server["host"] = host;
+            server["port"] = port;
+       }
+
         // Stop the server
         [ComVisible(true)]
         public String stopServer(){
@@ -105,8 +117,24 @@ namespace FyTek
         public byte[] buildPDFTCP(bool retBytes){            
             byte[] bytes = {};
             String errMsg = "";
+            String s = "";
+
+            if (cmds.Count > 0){
+                if (!opts.TryGetValue("inFile", out s)){
+                    s = $@"{Guid.NewGuid()}.frw";
+                    setInFile(s);
+                    sendFileTCP(s, "--input--commands--");
+                }
+            }
+
+            if (!opts.TryGetValue("outFile", out s) && retBytes){
+                setOutFile("stdout");
+            }
+
             if (dataCmds.Count > 0){
-                sendFileTCP("data--commands");
+                s = $@"{Guid.NewGuid()}";
+                setCmdlineOpts("-data " + s);
+                sendFileTCP(s, "--data--commands--");
             }
 
             errMsg = sendTCP();
@@ -130,15 +158,23 @@ namespace FyTek
 
         // Pass file contents in memory for input type files
         [ComVisible(true)]
-        public String setData(String a)
+        public String setDataCmd(String a)
         {
             dataCmds.Add(a);
             return a;
         }
 
+        // Pass data file name
+        [ComVisible(true)]
+        public String setDataFile(String a)
+        {
+            setOpt("dataFile",a);
+            return a;
+        }
+
         // Pass file contents in memory for input type files
         [ComVisible(true)]
-        public String setCmds(String a)
+        public String setPDFCmd(String a)
         {
             cmds.Add(a);
             return a;
@@ -149,6 +185,7 @@ namespace FyTek
         public String setKeyName(String a)
         {
             if (a.ToLower().Equals("demo")){
+                // Get the demo key from website - this only works with the demo pdfrw executable
                 WebClient client = new WebClient();
                 string res = client.DownloadString("http://www.fytek.com/cgi-bin/genkeyw_v2.cgi?prod=reportwriter");
                 Regex regex = new Regex("-kc [A-Z0-9]*");
@@ -235,8 +272,25 @@ namespace FyTek
         [ComVisible(true)]
         public String setCmdlineOpts(String a)
         {
+            String s = "";
+            if (opts.TryGetValue("extOpts", out s))
+                a = s + " " + a;
             setOpt("extOpts",a);
             return a;
+        }
+
+        // Set the quick mode
+        [ComVisible(true)]
+        public void setQuick()
+        {
+            setOpt("quick","Y");
+        }
+
+        // Set the quick2 mode
+        [ComVisible(true)]
+        public void setQuick2()
+        {
+            setOpt("quick2","Y");
         }
 
         // Assign the executable
@@ -275,6 +329,28 @@ namespace FyTek
         public void setEncrypt128(String a)
         {
             setOpt("enc128","Y");
+        }
+
+        // AES 128
+        [ComVisible(true)]
+        public String setEncryptAES(String a)
+        {
+            setOpt("aes",a);
+            return a;
+        }
+
+        // allow breaks
+        [ComVisible(true)]
+        public void setAllowBreaks(String a)
+        {
+            setOpt("allowBreaks","Y");
+        }
+
+        // Calls buildPDF - this is for legacy purposes
+        [ComVisible(true)]
+        public byte[] buildReport(bool waitForExit = true)
+        {    
+            return buildPDF(waitForExit);
         }
 
         // Call the executable (non server mode)
@@ -355,7 +431,7 @@ namespace FyTek
             String message = "";
 
             if (!server.TryGetValue("host", out host)){
-                return "Server not setup - try calling startServer first.";
+                return "Server not setup - try calling setServer or startServer first.";
             }
 
             try {         
@@ -371,9 +447,14 @@ namespace FyTek
 
                     message = " -send --binaryname--" + fileName + "--binarybegin--";
                     data = System.Text.Encoding.UTF8.GetBytes(message);             
-                    stream.Write(data, 0, data.Length);
-                    if (filePath.Equals("data--commands")){
+                    stream.Write(data, 0, data.Length);                    
+                    if (filePath.Equals("--data--commands--")){                        
                         foreach (String value in dataCmds){
+                            data = System.Text.Encoding.UTF8.GetBytes(value);
+                            stream.Write(data, 0, data.Length);
+                        }
+                    } else if (filePath.Equals("--input--commands--")){ 
+                        foreach (String value in cmds){
                             data = System.Text.Encoding.UTF8.GetBytes(value);
                             stream.Write(data, 0, data.Length);
                         }
@@ -384,11 +465,6 @@ namespace FyTek
                         while ((bytesRead = br.Read(buffer, 0, buffer.Length)) > 0)
                             stream.Write(buffer, 0, bytesRead);                    
 
-                    } else {                    
-                        foreach (String value in cmds){
-                            data = System.Text.Encoding.UTF8.GetBytes(value);
-                            stream.Write(data, 0, data.Length);
-                        }
                     }
                     message = "--binaryend--";
                 } else {
@@ -419,9 +495,16 @@ namespace FyTek
             if (opts.TryGetValue("inFile", out s))
                 if (!s.Equals(""))
                     message += "\"" + s + "\" ";
+            else if (cmds.Count > 0)        
+                    message += "- "; // get from stdin
             if (opts.TryGetValue("outFile", out s))
                 if (!s.Equals(""))
                     message += "\"" + s + "\" ";
+            else
+                message += "stdout "; // use stdout
+            if (opts.TryGetValue("dataFile", out s))
+                if (!s.Equals(""))
+                    message += " -data \"" + s + "\" ";
             if (opts.TryGetValue("keyCode", out s))
                 message += " -kc " + s;
             if (opts.TryGetValue("keyName", out s))
@@ -444,8 +527,16 @@ namespace FyTek
                 message += " -nochange";
             if (opts.TryGetValue("enc128", out s))
                 message += " -e128";
+            if (opts.TryGetValue("aes", out s))
+                message += " -aes " + s;
             if (opts.TryGetValue("extOpts", out s))
                 message += " " + s;
+            if (opts.TryGetValue("allowBreaks", out s))
+                message += " -allowbreaks";
+            if (opts.TryGetValue("quick", out s))
+                message += " -q";
+            if (opts.TryGetValue("quick2", out s))
+                message += " -q2";
             if (opts.TryGetValue("licInfo_name", out s)){
                 String p = "";
                 String d = "";
@@ -466,7 +557,7 @@ namespace FyTek
             String responseData = String.Empty;
 
             if (!server.TryGetValue("host", out host) || !client.Connected){
-                return (bytes, "Server not setup - try calling startServer first.");
+                return (bytes, "Server not setup - try calling setServer or startServer first.");
             }
 
             try {         
@@ -504,4 +595,3 @@ namespace FyTek
 
     }
 }
-
