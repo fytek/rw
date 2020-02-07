@@ -37,9 +37,37 @@ SaveBinaryDataTextStream "c:\temp\myfile.pdf", pdf
 ' clear out the commands for another run        
 cmd = mObj.resetOpts()
 ' let's check the server status
-cmd = mObj.serverStats()
-
+cmd = mObj.serverStatus()
 WScript.Echo(cmd)
+
+cmd = mObj.setPDFCmd("<PDF>")
+cmd = mObj.setPDFCmd("<PAGE>")
+cmd = mObj.setPDFCmd("<TABLE>")
+cmd = mObj.setPDFCmd("<TR>")
+cmd = mObj.setPDFCmd("<TD>")
+cmd = mObj.setPDFCmd("&date &time")
+cmd = mObj.setPDFCmd("</TD>")
+cmd = mObj.setPDFCmd("<TD>")
+cmd = mObj.setPDFCmd("This is a test string")
+cmd = mObj.setPDFCmd("</TD>")
+cmd = mObj.setPDFCmd("</TR>")
+cmd = mObj.setPDFCmd("</TABLE>")
+
+pdf = mObj.buildPDFTCP(true) 
+cmd = mObj.resetOpts()
+
+' Saving the pdf in this program
+SaveBinaryDataTextStream "c:\temp\myfile2.pdf", pdf
+
+cmd = mObj.setPDFCmd("<PDF>")
+cmd = mObj.setPDFCmd("<PAGE>")
+cmd = mObj.setPDFCmd("<TEXT>")
+cmd = mObj.setPDFCmd("This one is saved from the DLL")
+cmd = mObj.setPDFCmd("</TEXT>")
+
+' Filepath and name are supplied so it will be saved locally here
+pdf = mObj.buildPDFTCP(false, "c:\temp\myfile3.pdf") 
+cmd = mObj.resetOpts()
 
 ' shut down the server - typically you would leave it running for the next process to access however
 srvOpts = mObj.stopServer() 
