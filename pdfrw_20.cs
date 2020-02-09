@@ -51,26 +51,82 @@ namespace FyTek
         private List<string> cmds = new List<string>(); // input commands (input.frw)
         private List<string> dataCmds = new List<string>(); // data file (when not using setDataFile)
         private String exe = "pdfrw64"; // the executable - change with setExe
+        private const String srvHost = "localhost";
+        private const int srvPort = 7075;
+        private const int srvPool = 5;
+        private static String srvFile = ""; // the file of servers and port
+        private static int srvNum = 0; // the array index for the next server to use
+        private bool useAvailSrv = false; // true when choosing the next available server
         private Dictionary<string,string> opts = new Dictionary<string,string>(); // all of the parameter settings from the method calls
-        private Dictionary<string,object> server = new Dictionary<string,object>(); // the server host/port/log file key/values
-        
+        private Dictionary<string,object> server = new Dictionary<string,object>
+        {
+            {"host",srvHost},
+            {"port",srvPort},
+            {"pool",srvPool}
+        }; // the server host/port/log file key/values
+
+        [ComVisible(true)]
+        public class Results {
+            public byte[] Bytes {get; set;}
+            public String Msg {get; set;}
+        }        
+
+        private class Server {
+            public String Host {get; set;}
+            public int Port {get; set;}
+            public Server(String host, int port){
+                this.Host = host;
+                this.Port = port;
+            }
+        }
+
+        private static List<Server> servers = new List<Server>();
+
+        // Start up Report Writer as a server
+        [ComVisible(true)]
+        public String setServerFile(String fileName){
+            srvFile = fileName;
+            String line = "";
+            String[] retCmds = new String[2]; 
+            Regex r = new Regex("[\\s\\t]+");
+            int port;
+            srvNum = 0;
+            try {
+                System.IO.StreamReader file =   
+                new System.IO.StreamReader(fileName);  
+                servers = new List<Server>();
+                while((line = file.ReadLine()) != null)  
+                {  
+                    if (!line.Trim().StartsWith("#")
+                    && !line.Trim().Equals("")){
+                        retCmds = r.Split(line.Trim());
+                        int.TryParse(retCmds[1],out port);
+                        if (port > 0)
+                            servers.Add(new Server(retCmds[0],port));
+                    }
+                }  
+                file.Close();                              
+            } catch (IOException e) {
+                return e.Message;
+            }
+            return "";
+        }
+
         // Start up Report Writer as a server
         [ComVisible(true)]
         public String startServer(
-            String host = "localhost",
-            int port = 7075,
-            int pool = 5,
+            String host = srvHost,
+            int port = srvPort,
+            int pool = srvPool,
             String log = ""
           )
        {
             byte[] bytes = {};
-            String errMsg = "";
-
-            server.Clear();
-            server.Add("host",host);
-            server.Add("port",port);
-            server.Add("pool",pool);
-            server.Add("log",log); // file on server to log the output
+            String errMsg = "";            
+            server["host"] = host;
+            server["port"] = port;
+            server["pool"] = pool;
+            server["log"] = log; // file on server to log the output
             ProcessStartInfo startInfo = new ProcessStartInfo();
             startInfo.CreateNoWindow = false;
             startInfo.UseShellExecute = true;
@@ -105,8 +161,8 @@ namespace FyTek
 
         [ComVisible(true)]
         public void setServer(
-            String host = "localhost",
-            int port = 7075
+            String host = srvHost,
+            int port = srvPort
           )
        {
             server["host"] = host;
@@ -117,30 +173,113 @@ namespace FyTek
         [ComVisible(true)]
         public String stopServer(){
             byte[] bytes;
-            String errMsg;
+            String msg;
             setOpt("serverCmd","-quit");
-            (bytes, errMsg) = callTCP(isStop: true);
-            return errMsg;
+            (bytes, msg) = callTCP(isStop: true);
+            return msg;
         }
 
         // Get the current stats for the server
         [ComVisible(true)]
-        public String serverStatus(){
+        public String serverStatus(bool allServers = false){
             byte[] bytes;
-            String errMsg;
-            setOpt("serverCmd","-serverstat");
-            (bytes, errMsg) = callTCP(isStatus: true);
-            return errMsg;
+            String msg = "";
+            String sMsg = "";
+            if (!allServers || servers.Count == 0){
+                if (!isServerRunning()){
+                    return "Server " + server["host"] + " is not responding on port " + server["port"] + ".";
+                }
+                setOpt("serverCmd","-serverstat");            
+                (bytes, msg) = callTCP(isStatus: true);            
+            } else {
+                foreach(var item in servers){
+                    server["host"] = item.Host;
+                    server["port"] = item.Port;
+                    setOpt("serverCmd","-serverstat");            
+                    (bytes, sMsg) = callTCP(isStatus: true);
+                    msg += sMsg + "\n";
+                }
+            }
+            return msg;
+        }
+
+        // Get the current stats for the server
+        [ComVisible(true)]
+        public int serverThreads(){
+            byte[] bytes;
+            String msg;
+            int threadsAvail = 0;
+            if (!isServerRunning()){
+                return 0;
+            }
+            setOpt("serverCmd","-threadsavail");
+            (bytes, msg) = callTCP(isStatus: true);
+            int.TryParse(msg, out threadsAvail);
+            return threadsAvail;
         }
 
         // Stop a process
         [ComVisible(true)]
         public String serverCancelId(int id){
             byte[] bytes;
-            String errMsg;
+            String msg;
             setOpt("stopId","-stopid " + id);
-            (bytes, errMsg) = callTCP();
-            return errMsg;
+            (bytes, msg) = callTCP();
+            return msg;
+        }
+
+        // Check server
+        [ComVisible(true)]
+        public bool isServerRunning(){
+            Object host = "";
+            int tryCount = 0;
+            bool srvRunning = false;
+            if (client.Connected){
+                return true;
+            }            
+            if (!server.TryGetValue("host", out host) && servers.Count == 0){
+                setServer();
+            }
+            if (host == null && servers.Count > 0){
+                // Loop through list of servers and get the next one that gets connected
+                while(tryCount < servers.Count){
+                    srvNum++;
+                    srvNum %= servers.Count;
+                    useAvailSrv = true;
+                    srvRunning = true;
+                    setServer(servers[srvNum].Host, servers[srvNum].Port);
+                    if (client.Connected){
+                        // if previous connection, disconnect it
+                        try {
+                            stream.Close();
+                            client.Close();                        
+                        } catch (SocketException) { }
+                    }
+                    try { 
+                        client = new TcpClient((String) server["host"], (int) server["port"]);                        
+                        stream = client.GetStream();
+                        Socket s = client.Client;
+                        srvRunning = !((s.Poll(1000, SelectMode.SelectRead) && (s.Available == 0)) || !s.Connected);
+                        return true;
+                    } catch (SocketException) {
+                        srvRunning = false;
+                        stream.Close();
+                        client.Close();                        
+                    }
+                    tryCount++;
+                }
+            }            
+            if (!client.Connected && server.TryGetValue("host", out host)){
+                try {
+                    client = new TcpClient((String) server["host"], (int) server["port"]);
+                    stream = client.GetStream();                    
+                    Socket s = client.Client;
+                    return !((s.Poll(1000, SelectMode.SelectRead) && (s.Available == 0)) || !s.Connected);
+                } catch (SocketException e) {
+                    return false;
+                }
+            }
+            return false;
         }
 
         // Build the PDF using the server, optionally return the 
@@ -148,7 +287,7 @@ namespace FyTek
         // optional file name as well if saveFile is passed - this allows
         // for saving file on this box if server is running on different box
         [ComVisible(true)]
-        public byte[] buildPDFTCP(bool retBytes, String saveFile = ""){            
+        public object buildPDFTCP(bool retBytes = false, String saveFile = ""){            
             byte[] bytes = {};
             String errMsg = "";
             String s = "";
@@ -169,11 +308,22 @@ namespace FyTek
                 }
             }
             if (!saveFile.Equals("") || retBytes){
-                setOutFile("genfile");
+                if (!opts.TryGetValue("outFile", out s)){
+                    setOutFile("genfile");
+                }
             }
 
             (bytes, errMsg) = callTCP(retBytes: retBytes, saveFile: saveFile);
-            return bytes;
+            Results ret = new Results();
+            object results = new object();
+            ret.Bytes = bytes;
+            ret.Msg = errMsg.Equals("") ? "OK" : errMsg;
+            if (useAvailSrv){
+                server.Clear();
+                useAvailSrv = false;
+            }
+            results = ret;
+            return results;
         }
 
         // Send all files to server - only necessary if server is on a different box
@@ -212,8 +362,8 @@ namespace FyTek
         {
             if (a.ToLower().Equals("demo")){
                 // Get the demo key from website - this only works with the demo pdfrw executable
-                WebClient client = new WebClient();
-                string res = client.DownloadString("http://www.fytek.com/cgi-bin/genkeyw_v2.cgi?prod=reportwriter");
+                WebClient wClient = new WebClient();
+                string res = wClient.DownloadString("http://www.fytek.com/cgi-bin/genkeyw_v2.cgi?prod=reportwriter");
                 Regex regex = new Regex("-kc [A-Z0-9]*");
                 Match match = regex.Match(res);                
                 setOpt("keyName","testkey");
@@ -232,7 +382,7 @@ namespace FyTek
             return a;
         }
 
-        // License
+        // License settings
         [ComVisible(true)]
         public void licInfo(String licName,
             String licPwd,
@@ -345,14 +495,14 @@ namespace FyTek
 
         // Compression 1.5
         [ComVisible(true)]
-        public void setComp15(String a)
+        public void setComp15()
         {
             setOpt("comp15","Y");
         }
 
         // Encrypt 128
         [ComVisible(true)]
-        public void setEncrypt128(String a)
+        public void setEncrypt128()
         {
             setOpt("enc128","Y");
         }
@@ -367,7 +517,7 @@ namespace FyTek
 
         // allow breaks
         [ComVisible(true)]
-        public void setAllowBreaks(String a)
+        public void setAllowBreaks()
         {
             setOpt("allowBreaks","Y");
         }
@@ -388,14 +538,14 @@ namespace FyTek
 
         // Calls buildPDF - this is for legacy purposes
         [ComVisible(true)]
-        public byte[] buildReport(bool waitForExit = true)
+        public void buildReport(ref object results, bool waitForExit = true)
         {    
-            return buildPDF(waitForExit);
+            buildPDF(ref results, waitForExit);
         }
 
         // Call the executable (non server mode)
         [ComVisible(true)]
-        public byte[] buildPDF(bool waitForExit = true)
+        public void buildPDF(ref object results, bool waitForExit = true)
         {    
             byte[] bytes = {};
             String errMsg = "";
@@ -410,17 +560,23 @@ namespace FyTek
             startInfo.WindowStyle = ProcessWindowStyle.Hidden;
             startInfo.Arguments = setBaseOpts();  
             (bytes, errMsg) = runProcess(startInfo,waitForExit);
-            return bytes;
+            Results ret = new Results();
+            ret.Bytes = bytes;
+            ret.Msg = errMsg.Equals("") ? "OK" : errMsg;
+            results = ret;
         }
 
         // Reset the options
         [ComVisible(true)]
-        public void resetOpts(){
+        public void resetOpts(bool resetServer = false){
             String s;
             cmds = new List<string>();
             dataCmds = new List<string>();
             opts.Clear();
             opts.TryGetValue("inFile", out s);
+            if (resetServer){
+                server.Clear();
+            }
             
         }
 
@@ -433,17 +589,10 @@ namespace FyTek
             // String to store the response ASCII representation.
             String responseData = String.Empty;
             String message = "";
-
-            if (!server.TryGetValue("host", out host)){
-                return "Server not setup - try calling setServer or startServer first.";
+            if (!isServerRunning()){
+                return "Server not running";
             }
-
-            try {         
-                if (!client.Connected) {
-                    client = new TcpClient((String) host, (int) server["port"]);
-                    stream = client.GetStream();
-                }
-                
+            try {                         
                 // Send a file
                 byte[] buffer = new byte[1024];
                 int bytesRead = 0;
@@ -487,7 +636,7 @@ namespace FyTek
 
         private (byte[], String) runProcess(ProcessStartInfo startInfo, bool waitForExit) {
             // Start the process with the info we specified.
-            // Call WaitForExit and then the using statement will close.  
+            // Call WaitForExit if we are waiting for process to complete. 
             byte[] bytes = {};
             try {              
                 using (Process exeProcess = Process.Start(startInfo))
@@ -521,7 +670,8 @@ namespace FyTek
 
         }
 
-        // Passes data to server over socket but does not finalize (that is, send BUILDPDF command)
+        // Passes data to server over socket but does not finalize 
+        // (that is, does not send BUILDPDF command)
         private String sendTCP(){
             String errMsg = "";
             Byte[] data;
@@ -551,7 +701,7 @@ namespace FyTek
             return (errMsg);
         }
 
-
+        // build the command line string to pass to the executable
         private String setBaseOpts(){
             String s = "";
             String message = "";
@@ -629,13 +779,8 @@ namespace FyTek
             // String to store the response ASCII representation.
             String responseData = String.Empty;
 
-            if (!server.TryGetValue("host", out host)){
-                return (bytes, "Server not setup - try calling setServer or startServer first.");
-            }
-
-            if (!client.Connected) {
-                client = new TcpClient((String) host, (int) server["port"]);
-                stream = client.GetStream();
+            if (!isServerRunning()){
+                return (bytes, "Server not running");
             }
 
             errMsg = sendTCP();
@@ -672,6 +817,7 @@ namespace FyTek
                     
                     while(true) {
                         // Read the first batch of the TcpServer response bytes.
+                        buffer = new byte[1024];
                         bytesRead = stream.Read(buffer, 0, buffer.Length);
                         retStr = System.Text.Encoding.ASCII.GetString(buffer, 0, buffer.Length);
                         if (retStr.ToLower().StartsWith("content-length:")){
@@ -683,43 +829,42 @@ namespace FyTek
                           memstream.SetLength(0);
                           break;
                         }
-                        else
+                        else 
                         {
-                          retCmds = retStr.Split(':');                           
+                          retCmds = retStr.Split(new string[] { "\n\n", "\n" }, StringSplitOptions.None);
+                          retCmds = retCmds[0].Split(new string[] { ":" }, (Int32) 2, StringSplitOptions.None);                           
                           if (retCmds.Length > 0 && 
                               (retCmds[0].ToLower().Equals("send-file")
                               || retCmds[0].ToLower().Equals("send-md5"))) {
 
-                              if (retCmds[0].ToLower().Equals("send-file")){
-                              FileInfo f = new FileInfo(retCmds[1]);
-                              data = System.Text.Encoding.ASCII.GetBytes("Content-Length: " + f.Length + "\n\n");
-                              stream.Write(data, 0, data.Length);
-                              BinaryReader br = new BinaryReader(new FileStream(retCmds[1], FileMode.Open));
+                            if (retCmds[0].ToLower().Equals("send-file")){
+                                retCmds[1] = retCmds[1].Trim();
+                                FileInfo f = new FileInfo(retCmds[1]);
+                                data = System.Text.Encoding.ASCII.GetBytes("Content-Length: " + f.Length + "\n\n");
+                                stream.Write(data, 0, data.Length);
+                                BinaryReader br = new BinaryReader(new FileStream(retCmds[1], FileMode.Open));
 
-                              while ((bytesRead = br.Read(buffer, 0, buffer.Length)) > 0)
-                                  stream.Write(buffer, 0, bytesRead);     
-                              stream.Flush();                                       
-                              } else {
-                                  String message = "";
-                                  MD5 md5 = MD5.Create();
-                                  FileStream stream = File.OpenRead(retCmds[1]);
-                                  byte[] md5Bytes = md5.ComputeHash(stream);
-                                  String fileHash = ByteArrayToString(md5Bytes);
-                                  message = "Content-Length: " + fileHash.Length + "\n\n" + fileHash;
-                                  data = System.Text.Encoding.ASCII.GetBytes(message);             
-                                  stream.Write(data, 0, data.Length);
-                                  stream.Flush();
-                              }
-                          }
-                          if ((s.Poll(1000, SelectMode.SelectRead) && (s.Available == 0)) || !s.Connected)
-                          {
-                              break;
-                          } 
+                                while ((bytesRead = br.Read(buffer, 0, buffer.Length)) > 0)
+                                    stream.Write(buffer, 0, bytesRead);     
+                                stream.Flush();
+                            } else {
+                                    String message = "";
+                                    MD5 md5 = MD5.Create();
+                                    FileStream fStream = File.OpenRead(retCmds[1]);
+                                    byte[] md5Bytes = md5.ComputeHash(fStream);
+                                    String fileHash = ByteArrayToString(md5Bytes);
+                                    data = System.Text.Encoding.ASCII.GetBytes(message);             
+                                    stream.Write(data, 0, data.Length);
+                                    stream.Flush();
+                                }
+                            }
+                            if ((s.Poll(1000, SelectMode.SelectRead) && (s.Available == 0)) || !s.Connected)
+                            {
+                                break;
+                            } 
                         }                     
                     }
                 }                
-                stream.Close();
-                client.Close();
                 if (!saveFile.Equals("")){
                     File.WriteAllBytes (saveFile, bytes);
                     Array.Clear(bytes, 0, bytes.Length);
@@ -729,7 +874,12 @@ namespace FyTek
                 }
             } catch (SocketException e) {
                 errMsg = e.Message;
+            } catch (IOException e) {
+                errMsg = e.Message;                
             }
+            stream.Close();
+            client.Close();
+
             return (bytes, (responseData.Equals("") ? errMsg : responseData));
         }
 
