@@ -1,5 +1,3 @@
-/* Progress/OpenEdge example */
-
 DEFINE VARIABLE RWhandle AS COM-HANDLE.
 DEFINE VARIABLE RWres AS COM-HANDLE.
 
@@ -33,8 +31,8 @@ RWhandle:setPDFCmd ("</TEXT>").
 
 /* Tells the DLL to build the PDF */
 RWres = RWhandle:buildPDFTCP().
-message RWres:getMsg().
-/* RWres:getBytes() has the bytes of the PDF if true is passed as a parameter to buildPDFTCP. */
+message RWres:Msg.
+/* RWres:Bytes has the bytes of the PDF if true is passed as a parameter to buildPDFTCP. */
 
 /* Normally you would not do this here.  
 The server would remain running for other clients. */
