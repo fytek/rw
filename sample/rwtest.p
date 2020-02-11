@@ -30,14 +30,13 @@ RWhandle:setPDFCmd ("Hello, world").
 RWhandle:setPDFCmd ("</TEXT>").
 
 /* Tells the DLL to build the PDF */
-RWres = RWhandle:buildPDFTCP().
-message RWres:Msg.
-/* RWres:Bytes has the bytes of the PDF if true is passed as a parameter to buildPDFTCP. */
+RWres = RWhandle:buildReport().
+message RWres:getMsg().
+/* RWres:getBytes() has the bytes of the PDF if true is passed as a parameter to buildReport. */
 
 /* Normally you would not do this here.  
 The server would remain running for other clients. */
 RWhandle:stopServer().
 
 RELEASE OBJECT RWhandle.
-
 
