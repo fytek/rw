@@ -54,16 +54,11 @@ namespace FyTek
         private const String srvHost = "localhost";
         private const int srvPort = 7075;
         private const int srvPool = 5;
-        private static String srvFile = ""; // the file of servers and port
+        private static String srvFile = ""; // the file of servers and ports
         private static int srvNum = 0; // the array index for the next server to use
         private bool useAvailSrv = false; // true when choosing the next available server
         private Dictionary<string,string> opts = new Dictionary<string,string>(); // all of the parameter settings from the method calls
-        private Dictionary<string,object> server = new Dictionary<string,object>
-        {
-            {"host",srvHost},
-            {"port",srvPort},
-            {"pool",srvPool}
-        }; // the server host/port/log file key/values
+        private Dictionary<string,object> server = new Dictionary<string,object>(); // the server host/port/log file key/values
 
         [ComVisible(true)]
         public class Results {
@@ -100,9 +95,13 @@ namespace FyTek
                     if (!line.Trim().StartsWith("#")
                     && !line.Trim().Equals("")){
                         retCmds = r.Split(line.Trim());
-                        int.TryParse(retCmds[1],out port);
-                        if (port > 0)
-                            servers.Add(new Server(retCmds[0],port));
+                        if (retCmds[0].Equals("exe")){
+                            setExe(retCmds[1]); // passing location of exe instead of a host/port
+                        } else {
+                            int.TryParse(retCmds[1],out port);
+                            if (port > 0)
+                                servers.Add(new Server(retCmds[0],port));
+                        }
                     }
                 }  
                 file.Close();                              
@@ -275,7 +274,7 @@ namespace FyTek
                     stream = client.GetStream();                    
                     Socket s = client.Client;
                     return !((s.Poll(1000, SelectMode.SelectRead) && (s.Available == 0)) || !s.Connected);
-                } catch (SocketException e) {
+                } catch (SocketException) {
                     return false;
                 }
             }
@@ -286,8 +285,7 @@ namespace FyTek
         // raw bytes of the PDF for further processing when retBytes = true
         // optional file name as well if saveFile is passed - this allows
         // for saving file on this box if server is running on different box
-        [ComVisible(true)]
-        public object buildPDFTCP(bool retBytes = false, String saveFile = ""){            
+        private object buildPDFTCP(bool retBytes = false, String saveFile = ""){            
             byte[] bytes = {};
             String errMsg = "";
             String s = "";
@@ -315,15 +313,13 @@ namespace FyTek
 
             (bytes, errMsg) = callTCP(retBytes: retBytes, saveFile: saveFile);
             Results ret = new Results();
-            object results = new object();
             ret.Bytes = bytes;
             ret.Msg = errMsg.Equals("") ? "OK" : errMsg;
             if (useAvailSrv){
                 server.Clear();
                 useAvailSrv = false;
             }
-            results = ret;
-            return results;
+            return ret;
         }
 
         // Send all files to server - only necessary if server is on a different box
@@ -522,6 +518,13 @@ namespace FyTek
             setOpt("allowBreaks","Y");
         }
 
+        // overwrite existing
+        [ComVisible(true)]
+        public void setForce()
+        {
+            setOpt("force","Y");
+        }
+
         // open output
         [ComVisible(true)]
         public void setOpen()
@@ -536,16 +539,29 @@ namespace FyTek
             setOpt("print","Y");
         }        
 
-        // Calls buildPDF - this is for legacy purposes
+        // Calls buildPDF or buildPDFTCP
         [ComVisible(true)]
-        public void buildReport(ref object results, bool waitForExit = true)
-        {    
-            buildPDF(ref results, waitForExit);
+        public object buildReport(bool waitForExit = true,
+            String saveFile = "")    
+        {   
+            object host;
+            server.TryGetValue("host", out host);
+            if (server.TryGetValue("host", out host)
+                || servers.Count > 0) {
+                // if there is a server or servers, build using TCP                 
+                // waitForExit means return the byte array of the PDF
+                return buildPDFTCP(waitForExit, saveFile);
+            } else {
+                // otherwise, build using the executable
+                if (!saveFile.Equals("")){
+                    setOutFile(saveFile); // shorthand for calling setOutFile
+                }
+                return buildPDF(waitForExit);
+            }
         }
 
         // Call the executable (non server mode)
-        [ComVisible(true)]
-        public void buildPDF(ref object results, bool waitForExit = true)
+        private object buildPDF(bool waitForExit = true)
         {    
             byte[] bytes = {};
             String errMsg = "";
@@ -563,7 +579,7 @@ namespace FyTek
             Results ret = new Results();
             ret.Bytes = bytes;
             ret.Msg = errMsg.Equals("") ? "OK" : errMsg;
-            results = ret;
+            return ret;
         }
 
         // Reset the options
@@ -704,15 +720,15 @@ namespace FyTek
         // build the command line string to pass to the executable
         private String setBaseOpts(){
             String s = "";
-            String message = "";
+            String message = "";            
             if (opts.TryGetValue("inFile", out s))
-                if (!s.Equals(""))
-                    message += "\"" + s + "\" ";
+                message += "\"" + s + "\" ";
             else if (cmds.Count > 0)        
-                    message += "- "; // get from stdin
-            if (opts.TryGetValue("outFile", out s))
+                message += "- "; // get from stdin
+            if (opts.TryGetValue("outFile", out s)) {
                 if (!s.Equals(""))
                     message += "\"" + s + "\" ";
+                }
             else
                 message += "stdout "; // use stdout
             if (opts.TryGetValue("dataFile", out s))
@@ -750,6 +766,8 @@ namespace FyTek
                 message += " -q";
             if (opts.TryGetValue("quick2", out s))
                 message += " -q2";
+            if (opts.TryGetValue("force", out s))
+                message += " -force";            
             if (opts.TryGetValue("open", out s))
                 message += " -open";            
             if (opts.TryGetValue("print", out s))
