@@ -1,8 +1,6 @@
-
 Dim rwObj, cmd, srvOpts
 
 ' Make sure to register the dll first, if necessary (your path might be different)
-' Microsoft.Net.Compilers.3.4.0\tools\csc /target:library /platform:anycpu /out:pdfrw_20.dll pdfrw_20.cs /keyfile:mykey.snk
 ' C:\Windows\Microsoft.NET\Framework64\v4.0.30319\regasm.exe /codebase c:pdfrw_20.dll
 ' cscript.exe (or wscript.exe) rwtest.vbs
 set rwObj = CreateObject("FyTek.ReportWriter")
@@ -65,7 +63,7 @@ cmd = rwObj.sendFileTCP("abc.frw","c:\temp\sample.frw") ' Here is the file to pa
 ' will be assumed to be on the box where Report Writer server is running.
 
 ' Create the PDF and get back the byte array - or pass false to not wait for the PDF to be returned
-Set d = rwObj.buildPDFTCP (true)
+Set d = rwObj.buildReport (true)
 ' d.getByptes() will contain the newly build PDF - we'll save to a file but you might want to 
 ' display on a web page or save in a database
 if (StrComp(d.Msg,"OK") = 0) Then
@@ -92,7 +90,7 @@ cmd = rwObj.setPDFCmd("</TR>")
 cmd = rwObj.setPDFCmd("</TABLE>")
 
 WScript.Echo("Building PDF2...")
-Set d = rwObj.buildPDFTCP(true) 
+Set d = rwObj.buildReport(true) 
 cmd = rwObj.resetOpts()
 
 ' Saving the PDF in this program
@@ -109,7 +107,7 @@ cmd = rwObj.setPDFCmd("</TEXT>")
 WScript.Echo("Building PDF3...")
 
 ' Filepath and name are supplied so it will be saved locally here
-Set d = rwObj.buildPDFTCP(false, "c:\temp\myfile3.pdf") 
+Set d = rwObj.buildReport(false, "c:\temp\myfile3.pdf") 
 cmd = rwObj.resetOpts()
 
 ' shut down the server - typically you would leave it running for the next process to access however
