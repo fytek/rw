@@ -140,6 +140,10 @@ namespace FyTek
                 opts.TryGetValue("licInfo_name", out p);
                 opts.TryGetValue("licInfo_autodl", out d);
                 cmdsOut += " -licname " + s + " -licpwd " + p + (d.Equals("1") ? " -licweb" : "");
+            } else {
+                if (!opts.TryGetValue("keyCode", out s)){
+                    setKeyName("demo");
+                }
             }
             if (opts.TryGetValue("keyCode", out s))
                 cmdsOut += " -kc " + s;
@@ -491,6 +495,13 @@ namespace FyTek
 
         // Compression 1.5
         [ComVisible(true)]
+        public void setOptimize(bool compress = true)
+        {
+            setOpt("opt",compress ? "Y" : "N");
+        }
+
+        // Compression 1.5
+        [ComVisible(true)]
         public void setComp15()
         {
             setOpt("comp15","Y");
@@ -537,6 +548,68 @@ namespace FyTek
         public void setPrint()
         {
             setOpt("print","Y");
+        }        
+
+        // allow Perl
+        [ComVisible(true)]
+        public void setAllowPerl()
+        {
+            setOpt("allowPerl","Y");
+        }        
+
+        // xml break attributes
+        [ComVisible(true)]
+        public String setDataFileKeyAttr(String a)
+        {
+            setOpt("dataKeyAttr",a);
+            return a;
+        }        
+
+        // data file
+        [ComVisible(true)]
+        public String setDataFileOut(String fileName)
+        {
+            setOpt("dataFileOut",fileName);
+            return fileName;
+        }      
+
+        // xps file
+        [ComVisible(true)]
+        public String setXPSFile(String fileName)
+        {
+            setOpt("xpsFile",fileName);
+            return fileName;
+        }      
+
+        // buildlog file
+        [ComVisible(true)]
+        public String setBuildLog(String fileName)
+        {
+            setOpt("buildLog",fileName);
+            return fileName;
+        }      
+
+        // low priority
+        [ComVisible(true)]
+        public void setLowPriority()
+        {
+            setOpt("lowPriority","Y");
+        }        
+
+        // debug
+        [ComVisible(true)]
+        public String setDebug(String fileName)
+        {
+            setOpt("debug",fileName);
+            return fileName;
+        }        
+
+        // errFile
+        [ComVisible(true)]
+        public String setErrFile(String fileName)
+        {
+            setOpt("errFile",fileName);
+            return fileName;
         }        
 
         // Calls buildPDF or buildPDFTCP
@@ -742,6 +815,8 @@ namespace FyTek
                 message += " -guioff";
             if (opts.TryGetValue("comp15", out s))
                 message += " -comp15";
+            if (opts.TryGetValue("opt", out s))
+                message += " -opt" + (s.Equals("Y") ? "15" : "");
             if (opts.TryGetValue("owner", out s))
                 message += " -o \"" + s + "\"";
             if (opts.TryGetValue("user", out s))
@@ -772,8 +847,24 @@ namespace FyTek
                 message += " -open";            
             if (opts.TryGetValue("print", out s))
                 message += " -print";            
+            if (opts.TryGetValue("allowPerl", out s))
+                message += " -allowperl";            
             if (opts.TryGetValue("autoSend", out s))
-                message += " -autosend";            
+                message += " -autosend";                           
+            if (opts.TryGetValue("buildLog", out s))            
+                message += " -buildlog \"" + s + "\" ";            
+            if (opts.TryGetValue("xpsFile", out s))            
+                message += " -xps \"" + s + "\" ";            
+            if (opts.TryGetValue("dataKeyAttr", out s))
+                message += " -datakeyattr \"" + s + "\" ";            
+            if (opts.TryGetValue("lowPriority", out s))
+                message += " -lowpriority";            
+            if (opts.TryGetValue("dataFileOut", out s))
+                message += " -dataout \"" + s + "\" ";            
+            if (opts.TryGetValue("debug", out s))
+                message += " -debug \"" + s + "\" ";            
+            if (opts.TryGetValue("errFile", out s))
+                message += " -e \"" + s + "\" ";            
             if (opts.TryGetValue("licInfo_name", out s)){
                 String p = "";
                 String d = "";
