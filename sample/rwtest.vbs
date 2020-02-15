@@ -51,7 +51,6 @@ srvOpts = rwObj.startServer(,,,"c:\temp\mytestlog.txt")
 ' one at a time.  If more than one or you have included images, fonts, then may be easier to juse
 ' use setAutoSendFile.
 rwObj.setAutoSendFiles()
-cmd = rwObj.resetOpts(true)
 
 WScript.Echo("Building PDF1 - assumes there is a file c:\temp\sample.frw")
 ' Now that server is running, send some samples
