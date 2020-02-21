@@ -1,7 +1,7 @@
 # rw
 FyTek PDF Report Writer DLL
 
-This will be supplied soon as a compiled .NET DLL assembly with the executable download of Report Writer.  You may download now and compile youself (instructions are at the top of the code).
+This program is supplied as a compiled .NET DLL assembly with the executable download of Report Writer.  You may download this source and compile yourself (instructions are at the top of the code).
 
 The purpose is to allow a DLL method interface to the executable program pdfrw.exe or pdfrw64.exe.  This DLL, which is compiled as both a 32-bit and 64-bit version, may be used in Visual Basic program, ASP, C#, etc. to send the information for building and retreiving PDFs from PDF Report Writer.  This DLL also replaces the old DLL version that was limited to running Report Writer on the same box and had occassional memory issues.
 
