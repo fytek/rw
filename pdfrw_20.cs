@@ -57,7 +57,7 @@ namespace FyTek
         private static String srvFile = ""; // the file of servers and ports
         private static int srvNum = 0; // the array index for the next server to use
         private bool useAvailSrv = false; // true when choosing the next available server
-        private Dictionary<string,string> opts = new Dictionary<string,string>(); // all of the parameter settings from the method calls
+        private Dictionary<string,object> opts = new Dictionary<string,object>(); // all of the parameter settings from the method calls
         private Dictionary<string,object> server = new Dictionary<string,object>(); // the server host/port/log file key/values
 
         [ComVisible(true)]
@@ -132,33 +132,33 @@ namespace FyTek
             startInfo.FileName = exe;
             startInfo.WindowStyle = ProcessWindowStyle.Hidden;
             String cmdsOut = "";
-            String s = "";
+            object s = "";
 
-            if (opts.TryGetValue("licInfo_name", out s)){
-                String p = "";
-                String d = "";
-                opts.TryGetValue("licInfo_name", out p);
-                opts.TryGetValue("licInfo_autodl", out d);
-                cmdsOut += " -licname " + s + " -licpwd " + p + (d.Equals("1") ? " -licweb" : "");
+            if (opts.TryGetValue("licname", out s)){
+                object p = "";
+                object d = false;
+                opts.TryGetValue("licpwd", out p);
+                opts.TryGetValue("licweb", out d);
+                cmdsOut += " -licname " + s + " -licpwd " + p + ((bool) d ? " -licweb" : "");
             } else {
-                if (!opts.TryGetValue("keyCode", out s)){
+                if (!opts.TryGetValue("kn", out s)){
                     setKeyName("demo");
                 }
             }
-            if (opts.TryGetValue("keyCode", out s))
+            if (opts.TryGetValue("kc", out s))
                 cmdsOut += " -kc " + s;
-            if (opts.TryGetValue("keyName", out s))
+            if (opts.TryGetValue("kn", out s))
                 cmdsOut += " -kn " + s;
 
             cmdsOut += (!log.Equals("") ? " -log " + '"' + log + '"' : "")
                 + " -port " + port + " -pool " + pool + " -host " + host;
             startInfo.Arguments = "-server " + cmdsOut;
             (bytes, errMsg) = runProcess(startInfo, false);
-            opts.Remove("licInfo_name");
-            opts.Remove("licInfo_pwd");
-            opts.Remove("licInfo_autodl");
-            opts.Remove("keyName");
-            opts.Remove("keyCode");
+            opts.Remove("licname");
+            opts.Remove("licpwd");
+            opts.Remove("licweb");
+            opts.Remove("kn");
+            opts.Remove("kc");
             return errMsg;
         }
 
@@ -226,7 +226,7 @@ namespace FyTek
         public String serverCancelId(int id){
             byte[] bytes;
             String msg;
-            setOpt("stopId","-stopid " + id);
+            setOpt("serverCmd","-stopid " + id);
             (bytes, msg) = callTCP();
             return msg;
         }
@@ -292,13 +292,13 @@ namespace FyTek
         private object buildPDFTCP(bool retBytes = false, String saveFile = ""){            
             byte[] bytes = {};
             String errMsg = "";
-            String s = "";
+            object s = "";
 
             if (cmds.Count > 0){
                 if (!opts.TryGetValue("inFile", out s)){
                     s = $@"{Guid.NewGuid()}.frw"; // come up with unique file name
-                    setInFile(s);
-                    sendFileTCP(s, "--input--commands--");
+                    setInFile((String) s);
+                    sendFileTCP((String) s, "--input--commands--");
                 }
             }
 
@@ -306,7 +306,7 @@ namespace FyTek
                 if (!opts.TryGetValue("dataFile", out s)){
                   s = $@"{Guid.NewGuid()}"; // come up with unique file name
                   setCmdlineOpts("-data " + s);
-                  sendFileTCP(s, "--data--commands--");
+                  sendFileTCP((String) s, "--data--commands--");
                 }
             }
             if (!saveFile.Equals("") || retBytes){
@@ -329,7 +329,7 @@ namespace FyTek
         // Send all files to server - only necessary if server is on a different box
         [ComVisible(true)]
         public void setAutoSendFiles(){
-          setOpt("autoSend","Y");
+          setOpt("autosend",true);
         }
 
         // Pass file contents in memory for input type files
@@ -366,10 +366,10 @@ namespace FyTek
                 string res = wClient.DownloadString("http://www.fytek.com/cgi-bin/genkeyw_v2.cgi?prod=reportwriter");
                 Regex regex = new Regex("-kc [A-Z0-9]*");
                 Match match = regex.Match(res);                
-                setOpt("keyName","testkey");
-                setOpt("keyCode",match.Value.Substring(4));
+                setOpt("kn","testkey");
+                setOpt("kc",match.Value.Substring(4));
             } else {
-                setOpt("keyName",a);
+                setOpt("kn",a);
             }
             return a;
         }
@@ -378,7 +378,7 @@ namespace FyTek
         [ComVisible(true)]
         public String setKeyCode(String a)
         {
-            setOpt("keyCode",a);
+            setOpt("kc",a);
             return a;
         }
 
@@ -388,16 +388,16 @@ namespace FyTek
             String licPwd,
             int autoDownload)
         {
-            setOpt("licInfo_name",licName);
-            setOpt("licInfo_pwd",licPwd);
-            setOpt("licInfo_autodl",$"{autoDownload}");
+            setOpt("licname",licName);
+            setOpt("licpwd",licPwd);
+            setOpt("licweb",$"{autoDownload}");
         }
 
         // Assign the user
         [ComVisible(true)]
         public String setUser(String a)
         {
-            setOpt("user",a);
+            setOpt("u",a);
             return a;
         }
 
@@ -405,7 +405,7 @@ namespace FyTek
         [ComVisible(true)]
         public String setOwner(String a)
         {
-            setOpt("owner",a);
+            setOpt("o",a);
             return a;
         }
 
@@ -413,42 +413,42 @@ namespace FyTek
         [ComVisible(true)]
         public void setNoAnnote()
         {
-            setOpt("noAnnote","Y");
+            setOpt("noannote",true);
         }
 
         // Set no copy
         [ComVisible(true)]
         public void setNoCopy()
         {
-            setOpt("noCopy","Y");
+            setOpt("nocopy",true);
         }
 
         // Set no change
         [ComVisible(true)]
         public void setNoChange()
         {
-            setOpt("noChange","Y");
+            setOpt("nochange",true);
         }
 
         // Set no print
         [ComVisible(true)]
         public void setNoPrint()
         {
-            setOpt("noPrint","Y");
+            setOpt("noprint",true);
         }
 
         // Set the GUI process window off
         [ComVisible(true)]
         public void setGUIOff()
         {
-            setOpt("guiOff","Y");
+            setOpt("guioff",true);
         }
 
         // Set any other command line type options
         [ComVisible(true)]
         public String setCmdlineOpts(String a)
         {
-            String s = "";
+            object s = "";
             if (opts.TryGetValue("extOpts", out s))
                 a = s + " " + a;
             setOpt("extOpts",a);
@@ -459,14 +459,14 @@ namespace FyTek
         [ComVisible(true)]
         public void setQuick()
         {
-            setOpt("quick","Y");
+            setOpt("q",true);
         }
 
         // Set the quick2 mode
         [ComVisible(true)]
         public void setQuick2()
         {
-            setOpt("quick2","Y");
+            setOpt("q2",true);
         }
 
         // Assign the executable
@@ -494,24 +494,29 @@ namespace FyTek
         }
 
         // Compression 1.5
+        // Optimize
         [ComVisible(true)]
         public void setOptimize(bool compress = true)
         {
-            setOpt("opt",compress ? "Y" : "N");
+            if (compress){
+                setOpt("opt",true);
+            } else {
+                setOpt("opt15",true);
+            }            
         }
 
         // Compression 1.5
         [ComVisible(true)]
         public void setComp15()
         {
-            setOpt("comp15","Y");
+            setOpt("comp15",true);
         }
 
         // Encrypt 128
         [ComVisible(true)]
         public void setEncrypt128()
         {
-            setOpt("enc128","Y");
+            setOpt("e128",true);
         }
 
         // AES 128
@@ -526,42 +531,42 @@ namespace FyTek
         [ComVisible(true)]
         public void setAllowBreaks()
         {
-            setOpt("allowBreaks","Y");
+            setOpt("allowbreaks",true);
         }
 
         // overwrite existing
         [ComVisible(true)]
         public void setForce()
         {
-            setOpt("force","Y");
+            setOpt("force",true);
         }
 
         // open output
         [ComVisible(true)]
         public void setOpen()
         {
-            setOpt("open","Y");
+            setOpt("open",true);
         }        
 
         // print output
         [ComVisible(true)]
         public void setPrint()
         {
-            setOpt("print","Y");
+            setOpt("print",true);
         }        
 
         // allow Perl
         [ComVisible(true)]
         public void setAllowPerl()
         {
-            setOpt("allowPerl","Y");
+            setOpt("allowperl",true);
         }        
 
         // xml break attributes
         [ComVisible(true)]
         public String setDataFileKeyAttr(String a)
         {
-            setOpt("dataKeyAttr",a);
+            setOpt("datakeyattr",a);
             return a;
         }        
 
@@ -569,7 +574,7 @@ namespace FyTek
         [ComVisible(true)]
         public String setDataFileOut(String fileName)
         {
-            setOpt("dataFileOut",fileName);
+            setOpt("dataout",fileName);
             return fileName;
         }      
 
@@ -577,7 +582,7 @@ namespace FyTek
         [ComVisible(true)]
         public String setXPSFile(String fileName)
         {
-            setOpt("xpsFile",fileName);
+            setOpt("xps",fileName);
             return fileName;
         }      
 
@@ -585,7 +590,7 @@ namespace FyTek
         [ComVisible(true)]
         public String setBuildLog(String fileName)
         {
-            setOpt("buildLog",fileName);
+            setOpt("buildlog",fileName);
             return fileName;
         }      
 
@@ -593,7 +598,7 @@ namespace FyTek
         [ComVisible(true)]
         public void setLowPriority()
         {
-            setOpt("lowPriority","Y");
+            setOpt("lowpriority",true);
         }        
 
         // debug
@@ -658,11 +663,9 @@ namespace FyTek
         // Reset the options
         [ComVisible(true)]
         public void resetOpts(bool resetServer = false){
-            String s;
             cmds = new List<string>();
             dataCmds = new List<string>();
             opts.Clear();
-            opts.TryGetValue("inFile", out s);
             if (resetServer){
                 server.Clear();
             }
@@ -719,7 +722,7 @@ namespace FyTek
             return (errMsg);
         }
 
-        private void setOpt(String k, String v){
+        private void setOpt(String k, object v){
             opts[k] = v;
         }
 
@@ -767,11 +770,11 @@ namespace FyTek
             Object host = "";
             // String to store the response ASCII representation.
             String responseData = String.Empty;
-            String message = "";
+            object message = "";
 
             try {         
                 
-                String s;
+                object s;
                 if (opts.TryGetValue("serverCmd", out s)){
                     message = s;
                     opts.Remove("serverCmd");
@@ -779,7 +782,7 @@ namespace FyTek
                     message = setBaseOpts();
                 }
                 // Send commands
-                data = System.Text.Encoding.UTF8.GetBytes(message);             
+                data = System.Text.Encoding.UTF8.GetBytes((String) message);             
                 stream.Write(data, 0, data.Length);      
 
             } catch (SocketException e) {
@@ -792,7 +795,7 @@ namespace FyTek
 
         // build the command line string to pass to the executable
         private String setBaseOpts(){
-            String s = "";
+            object s = "";
             String message = "";            
             if (opts.TryGetValue("inFile", out s))
                 message += "\"" + s + "\" ";
@@ -807,71 +810,32 @@ namespace FyTek
             if (opts.TryGetValue("dataFile", out s))
                 if (!s.Equals(""))
                     message += " -data \"" + s + "\" ";
-            if (opts.TryGetValue("keyCode", out s))
-                message += " -kc " + s;
-            if (opts.TryGetValue("keyName", out s))
-                message += " -kn " + s;
-            if (opts.TryGetValue("guiOff", out s))
-                message += " -guioff";
-            if (opts.TryGetValue("comp15", out s))
-                message += " -comp15";
-            if (opts.TryGetValue("opt", out s))
-                message += " -opt" + (s.Equals("Y") ? "15" : "");
-            if (opts.TryGetValue("owner", out s))
-                message += " -o \"" + s + "\"";
-            if (opts.TryGetValue("user", out s))
-                message += " -u \"" + s + "\"";
-            if (opts.TryGetValue("noAnnote", out s))
-                message += " -noannote";
-            if (opts.TryGetValue("noCopy", out s))
-                message += " -nocopy";
-            if (opts.TryGetValue("noPrint", out s))
-                message += " -noprint";
-            if (opts.TryGetValue("noChange", out s))
-                message += " -nochange";
-            if (opts.TryGetValue("enc128", out s))
-                message += " -e128";
-            if (opts.TryGetValue("aes", out s))
-                message += " -aes " + s;
-            if (opts.TryGetValue("extOpts", out s))
-                message += " " + s;
-            if (opts.TryGetValue("allowBreaks", out s))
-                message += " -allowbreaks";
-            if (opts.TryGetValue("quick", out s))
-                message += " -q";
-            if (opts.TryGetValue("quick2", out s))
-                message += " -q2";
-            if (opts.TryGetValue("force", out s))
-                message += " -force";            
-            if (opts.TryGetValue("open", out s))
-                message += " -open";            
-            if (opts.TryGetValue("print", out s))
-                message += " -print";            
-            if (opts.TryGetValue("allowPerl", out s))
-                message += " -allowperl";            
-            if (opts.TryGetValue("autoSend", out s))
-                message += " -autosend";                           
-            if (opts.TryGetValue("buildLog", out s))            
-                message += " -buildlog \"" + s + "\" ";            
-            if (opts.TryGetValue("xpsFile", out s))            
-                message += " -xps \"" + s + "\" ";            
-            if (opts.TryGetValue("dataKeyAttr", out s))
-                message += " -datakeyattr \"" + s + "\" ";            
-            if (opts.TryGetValue("lowPriority", out s))
-                message += " -lowpriority";            
-            if (opts.TryGetValue("dataFileOut", out s))
-                message += " -dataout \"" + s + "\" ";            
-            if (opts.TryGetValue("debug", out s))
-                message += " -debug \"" + s + "\" ";            
-            if (opts.TryGetValue("errFile", out s))
-                message += " -e \"" + s + "\" ";            
-            if (opts.TryGetValue("licInfo_name", out s)){
-                String p = "";
-                String d = "";
-                opts.TryGetValue("licInfo_name", out p);
-                opts.TryGetValue("licInfo_autodl", out d);
-                message += " -licname " + s + " -licpwd " + p + (d.Equals("1") ? " -licweb" : "");
-            }
+
+
+            if (opts.TryGetValue("inFile", out s))
+                message += " \"" + s + "\"";
+            else if (cmds.Count > 0)        
+                    message += " -"; // get from stdin
+            if (opts.TryGetValue("outFile", out s)) {
+                if (!s.Equals(""))
+                    message += " \"" + s + "\"";
+                }
+            else
+                message += "stdout "; // use stdout
+                
+            foreach (KeyValuePair<string,object> opt in opts){
+                if (!opt.Key.Equals("inFile") && !opt.Key.Equals("outFile")){
+                    if (opt.Key.Equals("extOpts")){
+                        message += " " + opt.Value + " ";
+                    } else {
+                        message += " -" + opt.Key;
+                        if (!(opt.Value is bool)){
+                            message += " \"" + opt.Value.ToString().Replace("\"","\\\"") + "\"";
+                        }
+                    }                
+                }
+            }               
+
             return message;
         }
     
@@ -894,7 +858,7 @@ namespace FyTek
 
             errMsg = sendTCP();
             if (errMsg.Equals("")){
-                if (opts.TryGetValue("autoSend", out String s))
+                if (opts.TryGetValue("autosend", out object s))
                   retPDF = true; // need to keep open and send files
             }
             if (!saveFile.Equals("")){
