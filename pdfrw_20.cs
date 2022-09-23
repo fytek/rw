@@ -51,7 +51,7 @@ namespace FyTek
         private List<string> cmds = new List<string>(); // input commands (input.frw)
         private List<string> dataCmds = new List<string>(); // data file (when not using setDataFile)
         private String exe = "pdfrw64"; // the executable - change with setExe
-        private const String srvHost = "localhost";
+        private const String srvHost = "127.0.0.1"; // localhost (note 127.0.0.1 connects faster than localhost)
         private const int srvPort = 7075;
         private const int srvPool = 5;
         private static String srvFile = ""; // the file of servers and ports
@@ -880,7 +880,7 @@ namespace FyTek
                         responseData += System.Text.Encoding.ASCII.GetString(data, 0, rawData);
                     }
                     while (stream.DataAvailable);
-                } else if (!isStop) {
+                } else if (!isStop && (retPDF || retBytes)) {
                     MemoryStream memstream = new MemoryStream();
                     Socket s = client.Client;
                     byte[] buffer = new byte[1024];                    
